@@ -460,19 +460,16 @@ const FLAGS = {
 let state = { user: null, balance: 0, isAdmin: false, matches: [], bets: [], students: [] };
 
 function api(params) {
-  return new Promise((resolve, reject) => {
-    const cbName = 'cb_' + Math.random().toString(36).substr(2, 9);
-    params.callback = cbName;
-    const url = SCRIPT_URL + '?' + new URLSearchParams(params).toString();
-    const script = document.createElement('script');
-    window[cbName] = function(data) {
-      delete window[cbName];
-      document.body.removeChild(script);
-      resolve(data);
-    };
-    script.onerror = () => reject(new Error('Script load error'));
-    script.src = url;
-    document.body.appendChild(script);
+  const url = SCRIPT_URL + '?' + new URLSearchParams(params).toString();
+  return fetch(url, {
+    method: 'GET',
+    redirect: 'follow',
+    mode: 'cors',
+  })
+  .then(r => r.text())
+  .then(text => {
+    try { return JSON.parse(text); }
+    catch(e) { return { error: 'Parse error: ' + text.substring(0, 100) }; }
   });
 }
 
