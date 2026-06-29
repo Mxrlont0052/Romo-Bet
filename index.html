@@ -429,7 +429,7 @@
 <div id="toast"></div>
 
 <script>
-const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwaxjftTI_5EdKhRQ07QTRqZoAMV2BTMfaVq_m60tymuGaG7q-oJGVmLBkmarG-ZoPDyw/exec';
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbykQOtGKohlKND6Lju266crTh_TdL9DNwupOkv2ah9FM6otqrKIzEnQHHceqojY0LJ98Q/exec';
 const ADMIN_EMAILS = ['marloromero0052@gmail.com','danielpillajo140@gmail.com','lskike@gmail.com'];
 const PRIZES = [
   {name:'Gafas',coins:100,icon:'👓'},
@@ -460,17 +460,14 @@ const FLAGS = {
 let state = { user: null, balance: 0, isAdmin: false, matches: [], bets: [], students: [] };
 
 function api(params) {
-  const url = SCRIPT_URL + '?' + new URLSearchParams(params).toString();
-  return fetch(url, {
-    method: 'GET',
-    redirect: 'follow',
-    mode: 'cors',
-  })
-  .then(r => r.text())
-  .then(text => {
-    try { return JSON.parse(text); }
-    catch(e) { return { error: 'Parse error: ' + text.substring(0, 100) }; }
-  });
+  const target = SCRIPT_URL + '?' + new URLSearchParams(params).toString();
+  const proxy = 'https://api.allorigins.win/get?url=' + encodeURIComponent(target);
+  return fetch(proxy)
+    .then(r => r.json())
+    .then(data => {
+      try { return JSON.parse(data.contents); }
+      catch(e) { return { error: 'Parse error' }; }
+    });
 }
 
 function toast(msg) {
@@ -595,18 +592,22 @@ function renderMatches() {
     } else if (bet) {
       actionHTML = `<div class="placed-badge">Apostaste ${bet.coins} RC en ${bet.pick} · esperando resultado</div>`;
     } else {
+      const odds = MATCH_ODDS[m.id] || { local: 2.0, visit: 2.0, probL: 50, probV: 50 };
+      const mL = odds.local.toFixed(2);
+      const mV = odds.visit.toFixed(2);
+      const selOdds = pick === m.local ? odds.local : pick === m.visitante ? odds.visit : null;
       actionHTML = `
         <div class="bet-buttons">
           <button class="bet-btn ${pick===m.local?'selected':''}" onclick="selectPick(${m.id},'${m.local}')">
-            <span class="mult">x2</span><span class="team-label">${m.local.split(' ')[0]}</span>
+            <span class="mult">x${mL}</span><span class="team-label">${m.local.split(' ')[0]} (${odds.probL}%)</span>
           </button>
           <button class="bet-btn ${pick===m.visitante?'selected':''}" onclick="selectPick(${m.id},'${m.visitante}')">
-            <span class="mult">x2</span><span class="team-label">${m.visitante.split(' ')[0]}</span>
+            <span class="mult">x${mV}</span><span class="team-label">${m.visitante.split(' ')[0]} (${odds.probV}%)</span>
           </button>
         </div>
         ${pick ? `<div class="bet-input-row">
           <input type="number" id="bi-${m.id}" placeholder="Coins mín. 10" min="10" step="10">
-          <button onclick="placeBet(${m.id},'${pick}')">Apostar</button>
+          <button onclick="placeBet(${m.id},'${pick}')">Apostar · x${selOdds ? selOdds.toFixed(2) : '?'}</button>
         </div>` : ''}
       `;
     }
@@ -638,8 +639,11 @@ async function placeBet(matchId, pick) {
   const coins = parseInt(input.value);
   if (!coins || coins < 10) { toast('Mínimo 10 RC'); return; }
   if (coins > state.balance) { toast('No tienes suficientes RC'); return; }
+  const m = state.matches.find(x => String(x.id) === String(matchId));
+  const odds = MATCH_ODDS[matchId] || { local: 2.0, visit: 2.0 };
+  const mult = pick === m.local ? odds.local : odds.visit;
   showLoading(true);
-  const res = await api({ action: 'placeBet', email: state.user.email, matchId, pick, coins });
+  const res = await api({ action: 'placeBet', email: state.user.email, matchId, pick, coins, mult });
   showLoading(false);
   if (res.error) { toast('Error: ' + res.error); return; }
   state.balance = res.newBalance;
@@ -647,7 +651,7 @@ async function placeBet(matchId, pick) {
   delete picks[matchId];
   await loadBets();
   renderMatches();
-  toast('Apuesta registrada ✓');
+  toast('Apuesta registrada ✓ · Ganás x' + mult.toFixed(2) + ' si aciertas');
 }
 
 function renderPrizes() {
@@ -682,8 +686,10 @@ function renderHistory() {
   el.innerHTML = [...state.bets].reverse().map(b => {
     const match = m[b.matchId];
     const matchName = match ? match.local + ' vs ' + match.visitante : 'Partido #' + b.matchId;
+    const mult = b.mult || 2;
+    const earned = Math.round(b.coins * mult);
     const cls = b.resultado === 'ganada' ? 'win' : b.resultado === 'perdida' ? 'loss' : 'pending';
-    const val = b.resultado === 'ganada' ? '+' + (b.coins * 2) + ' RC' : b.resultado === 'perdida' ? '-' + b.coins + ' RC' : 'pendiente';
+    const val = b.resultado === 'ganada' ? '+' + earned + ' RC' : b.resultado === 'perdida' ? '-' + b.coins + ' RC' : 'pendiente';
     return `<div class="hist-row">
       <div><div class="hist-match">${matchName}</div><div class="hist-pick">Apostaste por ${b.pick} · ${b.coins} RC</div></div>
       <div class="hist-coins ${cls}">${val}</div>
@@ -700,6 +706,16 @@ function showSection(name, btn) {
   document.getElementById('heroSection').style.display = name === 'partidos' ? 'block' : 'none';
   if (name === 'premios') renderPrizes();
   if (name === 'historial') renderHistory();
+}
+
+async function closeMatch(matchId) {
+  if (!confirm('¿Cerrar apuestas para este partido?')) return;
+  showLoading(true);
+  const res = await api({ action: 'closeMatch', matchId, adminEmail: state.user.email });
+  showLoading(false);
+  if (res.error) { toast('Error: ' + res.error); return; }
+  await loadMatches();
+  toast('Apuestas cerradas ✓');
 }
 
 function openAdmin() { document.getElementById('adminOverlay').classList.add('open'); loadAdminData(); }
