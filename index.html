@@ -429,7 +429,7 @@
 <div id="toast"></div>
 
 <script>
-const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbykQOtGKohlKND6Lju266crTh_TdL9DNwupOkv2ah9FM6otqrKIzEnQHHceqojY0LJ98Q/exec';
+const SCRIPT_URL = 'https://yellow-lab-4630.marlonromero0052.workers.dev';
 const ADMIN_EMAILS = ['marloromero0052@gmail.com','danielpillajo140@gmail.com','lskike@gmail.com'];
 const PRIZES = [
   {name:'Gafas',coins:100,icon:'👓'},
@@ -460,24 +460,8 @@ const FLAGS = {
 let state = { user: null, balance: 0, isAdmin: false, matches: [], bets: [], students: [] };
 
 function api(params) {
-  return new Promise((resolve) => {
-    const cbName = 'romoBetCb_' + Date.now() + '_' + Math.floor(Math.random()*99999);
-    params.callback = cbName;
-    const url = SCRIPT_URL + '?' + new URLSearchParams(params).toString();
-    const script = document.createElement('script');
-    window[cbName] = function(data) {
-      delete window[cbName];
-      if (script.parentNode) script.parentNode.removeChild(script);
-      resolve(data);
-    };
-    script.onerror = function() {
-      delete window[cbName];
-      if (script.parentNode) script.parentNode.removeChild(script);
-      resolve({ error: 'Error de conexion' });
-    };
-    script.src = url;
-    document.body.appendChild(script);
-  });
+  const url = SCRIPT_URL + '?' + new URLSearchParams(params).toString();
+  return fetch(url).then(r => r.json());
 }
 
 function toast(msg) {
