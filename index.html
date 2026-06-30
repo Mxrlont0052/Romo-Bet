@@ -198,6 +198,25 @@
   .student-name { font-size:13px; font-weight:500; }
   .student-coins { color:#ff6060; font-weight:700; font-size:13px; }
 
+  #sec-priority { margin-bottom:2rem; }
+  .priority-row { display:flex; gap:12px; overflow-x:auto; padding-bottom:6px; }
+  .priority-card {
+    flex:0 0 auto; min-width:200px; background:var(--black-2); border-radius:12px; padding:0.9rem 1rem;
+    cursor:pointer; border:1px solid var(--white-border); border-left:4px solid var(--text-muted);
+  }
+  .priority-card.urgency-live { border-left-color:#ff4444; background:rgba(228,30,30,0.08); }
+  .priority-card.urgency-soon { border-left-color:#f87171; }
+  .priority-card.urgency-today { border-left-color:#fbbf24; }
+  .priority-card.urgency-later { border-left-color:#4ade80; }
+  .priority-countdown { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:6px; }
+  .priority-card.urgency-live .priority-countdown { color:#ff4444; }
+  .priority-card.urgency-soon .priority-countdown { color:#f87171; }
+  .priority-card.urgency-today .priority-countdown { color:#fbbf24; }
+  .priority-card.urgency-later .priority-countdown { color:#4ade80; }
+  .priority-teams { font-size:13px; font-weight:600; color:var(--white); margin-bottom:4px; }
+  .priority-when { font-size:11px; color:var(--text-muted); }
+  .priority-empty { font-size:13px; color:var(--text-muted); }
+
   .event-card { cursor:pointer; }
   .bettor-side { margin-bottom:1.25rem; }
   .bettor-side:last-child { margin-bottom:0; }
@@ -332,6 +351,10 @@
     </div>
   </div>
   <div class="main">
+    <section id="sec-priority">
+      <div class="section-title">Proximos a jugarse</div>
+      <div class="priority-row" id="priorityRow"></div>
+    </section>
     <section id="sec-eventos">
       <div class="section-title">Eventos disponibles</div>
       <div class="events-grid" id="eventsGrid"><div style="color:var(--text-muted);font-size:14px;">Cargando eventos...</div></div>
@@ -672,7 +695,61 @@ async function loadEvents() {
   document.getElementById('heroLiveCount').textContent = state.events.filter(e => e.estado === 'en_vivo').length;
   renderEvents();
   renderAdminEventSelects();
+  renderPriority();
 }
+
+function parseEventDateTime(ev) {
+  if (!ev.fecha) return null;
+  const hora = /^\d{1,2}:\d{2}/.test(ev.hora || '') ? ev.hora : '00:00';
+  const dt = new Date(ev.fecha + 'T' + hora + ':00');
+  return isNaN(dt.getTime()) ? null : dt;
+}
+
+function renderPriority() {
+  const el = document.getElementById('priorityRow');
+  const now = new Date();
+
+  const upcoming = state.events
+    .filter(ev => ev.estado === 'abierto' || ev.estado === 'en_vivo')
+    .map(ev => ({ ev, dt: parseEventDateTime(ev) }))
+    .filter(x => x.dt && (x.ev.estado === 'en_vivo' || x.dt >= now))
+    .sort((a, b) => a.dt - b.dt)
+    .slice(0, 5);
+
+  if (!upcoming.length) {
+    el.innerHTML = '<div class="priority-empty">No hay partidos proximos programados</div>';
+    return;
+  }
+
+  el.innerHTML = upcoming.map(({ ev, dt }) => {
+    const isLive = ev.estado === 'en_vivo';
+    const diffMin = Math.round((dt - now) / 60000);
+    let urgency, countdownText;
+    if (isLive) {
+      urgency = 'urgency-live';
+      countdownText = 'En vivo';
+    } else if (diffMin <= 60) {
+      urgency = 'urgency-soon';
+      countdownText = diffMin <= 1 ? 'Empieza ya' : 'Empieza en ' + diffMin + ' min';
+    } else if (diffMin <= 24 * 60) {
+      urgency = 'urgency-today';
+      const h = Math.floor(diffMin / 60), m = diffMin % 60;
+      countdownText = 'Empieza en ' + h + 'h ' + m + 'm';
+    } else {
+      urgency = 'urgency-later';
+      const days = Math.floor(diffMin / (24 * 60));
+      countdownText = 'En ' + days + (days === 1 ? ' dia' : ' dias');
+    }
+    const whenText = (ev.fecha || '') + ' ' + (ev.hora || '');
+    return '<div class="priority-card ' + urgency + '" onclick="openBettors(\'' + ev.id + '\')">' +
+      '<div class="priority-countdown">' + countdownText + '</div>' +
+      '<div class="priority-teams">' + ev.local + ' vs ' + ev.visitante + '</div>' +
+      '<div class="priority-when">' + whenText + '</div>' +
+    '</div>';
+  }).join('');
+}
+
+let priorityInterval = setInterval(() => { if (state.events.length) renderPriority(); }, 30000);
 
 async function loadBets() {
   if (!state.user) return;
