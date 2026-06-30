@@ -310,7 +310,15 @@
   footer { border-top:1px solid var(--white-border); padding:2rem 1.5rem; text-align:center; color:var(--text-muted); font-size:12px; }
 
   @media (max-width:600px) {
-    .nav-tabs { display:none; }
+    nav { flex-wrap:wrap; height:auto; min-height:60px; padding:0.6rem 1rem; row-gap:8px; }
+    .nav-logo { order:1; }
+    .nav-right { order:2; }
+    .nav-tabs {
+      order:3; width:100%; overflow-x:auto; -webkit-overflow-scrolling:touch;
+      scrollbar-width:none; -ms-overflow-style:none;
+    }
+    .nav-tabs::-webkit-scrollbar { display:none; }
+    .nav-tab { flex:0 0 auto; white-space:nowrap; }
     .events-grid { grid-template-columns:1fr; }
     .prizes-grid { grid-template-columns:repeat(2,1fr); }
     .hero-stats { gap:1.5rem; }
