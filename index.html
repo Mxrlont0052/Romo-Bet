@@ -430,7 +430,7 @@
 
 <script>
 const SCRIPT_URL = 'https://yellow-lab-4630.marlonromero0052.workers.dev';
-const ADMIN_EMAILS = ['marloromero0052@gmail.com','danielpillajo140@gmail.com','lskike@gmail.com'];
+const ADMIN_EMAILS = ['marlonromero0052@gmail.com','danielpillajo140@gmail.com','lskike@gmail.com'];
 const PRIZES = [
   {name:'Gafas',coins:100,icon:'👓'},
   {name:'Llavero Romo',coins:100,icon:'🔑'},
@@ -728,7 +728,13 @@ async function closeMatch(matchId) {
   toast('Apuestas cerradas ✓');
 }
 
-function openAdmin() { document.getElementById('adminOverlay').classList.add('open'); loadAdminData(); }
+function openAdmin() { 
+  document.getElementById('adminOverlay').classList.add('open'); 
+  document.getElementById('studentsList').innerHTML = 'Cargando...';
+  document.getElementById('aStudent').innerHTML = '<option>Cargando...</option>';
+  document.getElementById('aRedeemStudent').innerHTML = '<option>Cargando...</option>';
+  setTimeout(() => loadAdminData(), 300);
+}
 function closeAdmin() { document.getElementById('adminOverlay').classList.remove('open'); }
 
 async function loadAdminData() {
