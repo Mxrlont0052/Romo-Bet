@@ -216,6 +216,22 @@
   .priority-teams { font-size:13px; font-weight:600; color:var(--white); margin-bottom:4px; }
   .priority-when { font-size:11px; color:var(--text-muted); }
   .priority-empty { font-size:13px; color:var(--text-muted); }
+  .priority-ratio { margin-top:8px; font-size:10px; color:var(--text-muted); }
+  .priority-ratio-bar { display:flex; height:6px; border-radius:3px; overflow:hidden; background:var(--white-dim); }
+  .priority-ratio-local { background:var(--red); }
+  .priority-ratio-visit { background:#4ade80; }
+  .priority-ratio-labels { display:flex; justify-content:space-between; margin-top:4px; }
+  .priority-ratio-empty { margin-top:8px; font-size:10px; color:var(--text-muted); }
+
+  .clasificacion-list { display:flex; flex-direction:column; gap:8px; margin-bottom:3rem; }
+  .clasificacion-row {
+    display:flex; align-items:center; justify-content:space-between; gap:12px; cursor:pointer;
+    background:var(--black-2); border:1px solid var(--white-border); border-radius:10px; padding:0.75rem 1rem;
+  }
+  .clasificacion-teams { display:flex; align-items:center; gap:8px; font-size:13px; font-weight:600; flex-wrap:wrap; }
+  .clasificacion-flag { width:1.4em; height:1.05em; border-radius:2px; }
+  .clasificacion-score { font-weight:800; color:var(--red); font-size:13px; }
+  .clasificacion-meta { font-size:11px; color:var(--text-muted); text-align:right; line-height:1.4; white-space:nowrap; }
 
   .event-card { cursor:pointer; }
   .bettor-side { margin-bottom:1.25rem; }
@@ -328,7 +344,9 @@
 <nav id="mainNav" style="display:none">
   <div class="nav-logo"><span class="r">ROMO</span><span class="b">BET</span></div>
   <div class="nav-tabs">
-    <button class="nav-tab active" onclick="showSection('eventos',this)">Eventos</button>
+    <button class="nav-tab active" onclick="showSection('eventos',this); setEventsTipo('futbol')">Mundial</button>
+    <button class="nav-tab" onclick="showSection('eventos',this); setEventsTipo('dj')">DJs</button>
+    <button class="nav-tab" onclick="showSection('clasificacion',this)">Clasificacion</button>
     <button class="nav-tab" onclick="showSection('premios',this)">Premios</button>
     <button class="nav-tab" onclick="showSection('historial',this)">Historial</button>
     <button class="nav-tab" id="adminTabBtn" onclick="openAdmin()" style="display:none;color:#ff6060;">Admin</button>
@@ -356,8 +374,12 @@
       <div class="priority-row" id="priorityRow"></div>
     </section>
     <section id="sec-eventos">
-      <div class="section-title">Eventos disponibles</div>
+      <div class="section-title" id="eventosSectionTitle">Mundial 2026</div>
       <div class="events-grid" id="eventsGrid"><div style="color:var(--text-muted);font-size:14px;">Cargando eventos...</div></div>
+    </section>
+    <section id="sec-clasificacion" style="display:none">
+      <div class="section-title">Clasificacion - 1/16 (octavos)</div>
+      <div class="clasificacion-list" id="clasificacionList"></div>
     </section>
     <section id="sec-premios" style="display:none">
       <div class="section-title">Catalogo de premios</div>
@@ -580,7 +602,7 @@ function normTeam(s) {
 const FLAGS_NORM = {};
 Object.keys(FLAGS).forEach(k => { FLAGS_NORM[normTeam(k)] = FLAGS[k]; });
 
-let state = { user:null, balance:0, isAdmin:false, config:{}, events:[], bets:[], students:[] };
+let state = { user:null, balance:0, isAdmin:false, config:{}, events:[], bets:[], students:[], eventsTipo:'futbol' };
 let picks = {};
 
 function api(params) {
@@ -745,8 +767,35 @@ function renderPriority() {
       '<div class="priority-countdown">' + countdownText + '</div>' +
       '<div class="priority-teams">' + ev.local + ' vs ' + ev.visitante + '</div>' +
       '<div class="priority-when">' + whenText + '</div>' +
+      '<div class="priority-ratio" id="ratio-' + ev.id + '">Cargando apuestas...</div>' +
     '</div>';
   }).join('');
+
+  upcoming.forEach(({ ev }) => loadPriorityRatio(ev));
+}
+
+async function loadPriorityRatio(ev) {
+  const bets = await api({ action: 'getEventBets', eventId: ev.id });
+  const el = document.getElementById('ratio-' + ev.id);
+  if (!el) return;
+
+  const list = Array.isArray(bets) ? bets : [];
+  const localCoins = list.filter(b => b.pick === ev.local).reduce((s, b) => s + (b.coins || 0), 0);
+  const visitCoins = list.filter(b => b.pick === ev.visitante).reduce((s, b) => s + (b.coins || 0), 0);
+  const total = localCoins + visitCoins;
+
+  if (!total) {
+    el.innerHTML = '<div class="priority-ratio-empty">Sin apuestas aun</div>';
+    return;
+  }
+  const pctLocal = Math.round((localCoins / total) * 100);
+  const pctVisit = 100 - pctLocal;
+  el.innerHTML =
+    '<div class="priority-ratio-bar">' +
+      '<div class="priority-ratio-local" style="width:' + pctLocal + '%"></div>' +
+      '<div class="priority-ratio-visit" style="width:' + pctVisit + '%"></div>' +
+    '</div>' +
+    '<div class="priority-ratio-labels"><span>' + pctLocal + '%</span><span>' + pctVisit + '%</span></div>';
 }
 
 let priorityInterval = setInterval(() => { if (state.events.length) renderPriority(); }, 30000);
@@ -791,12 +840,15 @@ function calcOdds(ev) {
 
 function renderEvents() {
   const g = document.getElementById('eventsGrid');
-  if (!state.events.length) { g.innerHTML = '<div style="color:var(--text-muted)">No hay eventos cargados todavia</div>'; return; }
+  const byTipo = state.events.filter(ev => (ev.tipo === 'dj') === (state.eventsTipo === 'dj'));
+  if (!byTipo.length) { g.innerHTML = '<div style="color:var(--text-muted)">No hay eventos cargados todavia</div>'; return; }
 
-  const sorted = [...state.events].sort((a,b) => {
+  const sorted = [...byTipo].sort((a,b) => {
     const order = { en_vivo:0, abierto:1, cerrado:2, finalizado:3 };
     return (order[a.estado] ?? 9) - (order[b.estado] ?? 9);
   });
+
+  const now = new Date();
 
   g.innerHTML = sorted.map(ev => {
     const bet = getBetForEvent(ev.id);
@@ -808,11 +860,15 @@ function renderEvents() {
     const isFinalizado = ev.estado === 'finalizado';
     const isLive = ev.estado === 'en_vivo';
     const isCerrado = ev.estado === 'cerrado';
+    const kickoffDt = parseEventDateTime(ev);
+    const minutesSinceKickoff = kickoffDt ? (now - kickoffDt) / 60000 : null;
+    const autoClosed = !isFinalizado && !isCerrado && minutesSinceKickoff !== null && minutesSinceKickoff >= 48;
+    const closedForBetting = isCerrado || autoClosed;
     const odds = calcOdds(ev);
 
     let badgeHTML = '<span class="badge-open">Abierto</span>';
     if (isLive) badgeHTML = '<span class="badge-live"><span class="dot"></span>En vivo</span>';
-    else if (isCerrado) badgeHTML = '<span class="badge-pending">Cerrado</span>';
+    else if (closedForBetting) badgeHTML = '<span class="badge-pending">Cerrado</span>';
     else if (isFinalizado) badgeHTML = '<span class="badge-done">Finalizado</span>';
     else if (bet) badgeHTML = '<span class="badge-pending">Apostado</span>';
 
@@ -826,7 +882,7 @@ function renderEvents() {
         const winStyle = cls === 'win' ? 'color:#4ade80;border-color:rgba(74,222,128,0.3);background:rgba(74,222,128,0.1)' : '';
         actionHTML += '<div class="placed-badge" style="margin-top:6px;' + winStyle + '">' + txt + '</div>';
       }
-    } else if (isCerrado) {
+    } else if (closedForBetting) {
       actionHTML = '<div class="placed-badge">Apuestas cerradas - esperando resultado</div>';
     } else if (bet) {
       actionHTML = '<div class="placed-badge">Apostaste ' + bet.coins + ' RC en ' + bet.pick + ' - x' + (bet.mult||2).toFixed(2) + '</div>';
@@ -876,6 +932,39 @@ function renderEvents() {
         '<div class="team">' + fV + '<span class="team-name">' + ev.visitante + '</span>' + scoreHTMLv + '</div>' +
       '</div>' +
       actionHTML +
+    '</div>';
+  }).join('');
+}
+
+function renderClasificacion() {
+  const el = document.getElementById('clasificacionList');
+  const futbol = state.events.filter(ev => ev.tipo === 'futbol');
+  if (!futbol.length) { el.innerHTML = '<div style="color:var(--text-muted)">No hay partidos del mundial cargados todavia</div>'; return; }
+
+  const sorted = [...futbol].sort((a, b) => {
+    const da = parseEventDateTime(a), db = parseEventDateTime(b);
+    if (da && db) return da - db;
+    return 0;
+  });
+
+  el.innerHTML = sorted.map(ev => {
+    const flagCodeL = FLAGS_NORM[normTeam(ev.local)] || ev.banderaLocal || '';
+    const flagCodeV = FLAGS_NORM[normTeam(ev.visitante)] || ev.banderaVisitante || '';
+    const fL = flagCodeL ? '<span class="fi fi-' + flagCodeL + ' clasificacion-flag"></span>' : '🏳️';
+    const fV = flagCodeV ? '<span class="fi fi-' + flagCodeV + ' clasificacion-flag"></span>' : '🏳️';
+    const isFinalizado = ev.estado === 'finalizado';
+    const isLive = ev.estado === 'en_vivo';
+    const scoreText = (isLive || isFinalizado) ? ((ev.golLocal ?? 0) + ' - ' + (ev.golVisitante ?? 0)) : 'vs';
+    const estadoLabel = isFinalizado ? 'Finalizado' : isLive ? 'En vivo' : (ev.estado === 'cerrado' ? 'Cerrado' : 'Abierto');
+    const winnerText = isFinalizado && ev.ganador ? (ev.ganador === 'empate' ? 'Empate' : 'Gano ' + ev.ganador) : '';
+
+    return '<div class="clasificacion-row" onclick="openBettors(\'' + ev.id + '\')">' +
+      '<div class="clasificacion-teams">' +
+        fL + '<span>' + ev.local + '</span>' +
+        '<span class="clasificacion-score">' + scoreText + '</span>' +
+        '<span>' + ev.visitante + '</span>' + fV +
+      '</div>' +
+      '<div class="clasificacion-meta">' + (ev.fecha || '') + ' ' + (ev.hora || '') + '<br>' + estadoLabel + (winnerText ? ' · ' + winnerText : '') + '</div>' +
     '</div>';
   }).join('');
 }
@@ -998,13 +1087,20 @@ function renderBettors(ev, bets) {
   document.getElementById('bettorsContent').innerHTML = sideHTML(ev.local, local) + sideHTML(ev.visitante, visit);
 }
 
+function setEventsTipo(tipo) {
+  state.eventsTipo = tipo;
+  document.getElementById('eventosSectionTitle').textContent = tipo === 'dj' ? 'Eventos DJ' : 'Mundial 2026';
+  renderEvents();
+}
+
 function showSection(name, btn) {
-  ['eventos','premios','historial'].forEach(s => {
+  ['eventos','clasificacion','premios','historial'].forEach(s => {
     document.getElementById('sec-' + s).style.display = s === name ? 'block' : 'none';
   });
   document.querySelectorAll('.nav-tab').forEach(b => b.classList.remove('active'));
   if (btn) btn.classList.add('active');
   document.getElementById('heroSection').style.display = name === 'eventos' ? 'block' : 'none';
+  if (name === 'clasificacion') renderClasificacion();
   if (name === 'premios') renderPrizes();
   if (name === 'historial') renderHistory();
 }
