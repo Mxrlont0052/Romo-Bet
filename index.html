@@ -198,6 +198,20 @@
   .student-name { font-size:13px; font-weight:500; }
   .student-coins { color:#ff6060; font-weight:700; font-size:13px; }
 
+  .event-card { cursor:pointer; }
+  .bettor-side { margin-bottom:1.25rem; }
+  .bettor-side:last-child { margin-bottom:0; }
+  .bettor-side-head {
+    display:flex; justify-content:space-between; align-items:center; font-size:13px; font-weight:700;
+    color:var(--white); margin-bottom:8px; padding-bottom:6px; border-bottom:1px solid var(--white-border);
+  }
+  .bettor-side-total { font-size:11px; color:var(--text-muted); font-weight:600; }
+  .bettor-row { display:flex; justify-content:space-between; padding:6px 0; font-size:13px; }
+  .bettor-row:not(:last-child) { border-bottom:0.5px solid var(--white-border); }
+  .bettor-name { color:var(--white); }
+  .bettor-coins { color:#ff6060; font-weight:700; }
+  .bettor-empty { font-size:12px; color:var(--text-muted); padding:4px 0 8px; }
+
   .login-overlay {
     position:fixed; inset:0; background:var(--black); z-index:300;
     display:flex; align-items:center; justify-content:center; flex-direction:column; padding:2rem;
@@ -487,6 +501,16 @@
   </div>
 </div>
 
+<div class="admin-overlay" id="bettorsOverlay">
+  <div class="admin-panel" style="max-width:420px;">
+    <div class="admin-header">
+      <div class="admin-title" id="bettorsTitle">Apostadores</div>
+      <button class="admin-close" onclick="closeBettors()">x</button>
+    </div>
+    <div id="bettorsContent">Cargando...</div>
+  </div>
+</div>
+
 <footer id="mainFooter" style="display:none">
   ROMO BET - Tu casa de apuestas DJ favorita
 </footer>
@@ -734,7 +758,7 @@ function renderEvents() {
       const visitSafe = ev.visitante.replace(/"/g, '&quot;');
       const localBtnClass = pick === ev.local ? 'bet-btn selected' : 'bet-btn';
       const visitBtnClass = pick === ev.visitante ? 'bet-btn selected' : 'bet-btn';
-      let html = '<div class="bet-buttons">';
+      let html = '<div class="bet-buttons" onclick="event.stopPropagation()">';
       html += '<button class="' + localBtnClass + '" data-event="' + ev.id + '" data-team="' + localSafe + '" onclick="selectPickFromBtn(this)">';
       html += '<span class="mult">x' + odds.local.toFixed(2) + '</span><span class="team-label">' + ev.local.split(' ')[0] + '</span>';
       html += '</button>';
@@ -744,7 +768,7 @@ function renderEvents() {
       html += '</div>';
       if (pick) {
         const pickSafe = pick.replace(/"/g, '&quot;');
-        html += '<div class="bet-input-row">';
+        html += '<div class="bet-input-row" onclick="event.stopPropagation()">';
         html += '<input type="number" id="bi-' + ev.id + '" placeholder="Coins min. 10" min="10" step="10">';
         html += '<button data-event="' + ev.id + '" data-team="' + pickSafe + '" onclick="placeBetFromBtn(this)">Apostar</button>';
         html += '</div>';
@@ -761,7 +785,7 @@ function renderEvents() {
 
     const cardClass = 'event-card' + (bet && !isFinalizado ? ' bet-placed' : '') + (isLive ? ' live' : '');
 
-    return '<div class="' + cardClass + '">' +
+    return '<div class="' + cardClass + '" onclick="openBettors(\'' + ev.id + '\')">' +
       '<div class="event-meta">' +
         '<div class="event-meta-left">' +
           '<span>' + (ev.tipo === 'futbol' ? 'Futbol' : 'DJ') + '</span>' +
@@ -863,6 +887,38 @@ function renderHistory() {
       '<div class="hist-coins ' + cls + '">' + val + '</div>' +
     '</div>';
   }).join('');
+}
+
+async function openBettors(eventId) {
+  const ev = state.events.find(e => String(e.id) === String(eventId));
+  if (!ev) return;
+  document.getElementById('bettorsTitle').textContent = ev.local + ' vs ' + ev.visitante;
+  document.getElementById('bettorsContent').innerHTML = 'Cargando...';
+  document.getElementById('bettorsOverlay').classList.add('open');
+  const bets = await api({ action: 'getEventBets', eventId });
+  renderBettors(ev, Array.isArray(bets) ? bets : []);
+}
+
+function closeBettors() {
+  document.getElementById('bettorsOverlay').classList.remove('open');
+}
+
+function renderBettors(ev, bets) {
+  const local = bets.filter(b => b.pick === ev.local);
+  const visit = bets.filter(b => b.pick === ev.visitante);
+  const sumCoins = arr => arr.reduce((s, b) => s + (b.coins || 0), 0);
+
+  const rowsHTML = arr => arr.length
+    ? arr.map(b => '<div class="bettor-row"><span class="bettor-name">' + b.nombre + '</span><span class="bettor-coins">' + b.coins + ' RC</span></div>').join('')
+    : '<div class="bettor-empty">Nadie ha apostado aqui todavia</div>';
+
+  const sideHTML = (nombre, arr) =>
+    '<div class="bettor-side">' +
+      '<div class="bettor-side-head"><span>' + nombre + '</span><span class="bettor-side-total">' + sumCoins(arr) + ' RC · ' + arr.length + '</span></div>' +
+      rowsHTML(arr) +
+    '</div>';
+
+  document.getElementById('bettorsContent').innerHTML = sideHTML(ev.local, local) + sideHTML(ev.visitante, visit);
 }
 
 function showSection(name, btn) {
