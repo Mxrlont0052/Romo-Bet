@@ -712,26 +712,34 @@ function renderEvents() {
         const cls = bet.resultado === 'ganada' ? 'win' : 'loss';
         const mult = bet.mult || 2;
         const txt = bet.resultado === 'ganada' ? ('+' + Math.round(bet.coins*mult) + ' RC ganados') : ('-' + bet.coins + ' RC perdidos');
-        actionHTML += '<div class="placed-badge" style="margin-top:6px;' + (cls==='win'?'color:#4ade80;border-color:rgba(74,222,128,0.3);background:rgba(74,222,128,0.1)':'') + '">' + txt + '</div>';
+        const winStyle = cls === 'win' ? 'color:#4ade80;border-color:rgba(74,222,128,0.3);background:rgba(74,222,128,0.1)' : '';
+        actionHTML += '<div class="placed-badge" style="margin-top:6px;' + winStyle + '">' + txt + '</div>';
       }
     } else if (isCerrado) {
       actionHTML = '<div class="placed-badge">Apuestas cerradas - esperando resultado</div>';
     } else if (bet) {
       actionHTML = '<div class="placed-badge">Apostaste ' + bet.coins + ' RC en ' + bet.pick + ' - x' + (bet.mult||2).toFixed(2) + '</div>';
     } else {
-      actionHTML =
-        '<div class="bet-buttons">' +
-          '<button class="bet-btn ' + (pick===ev.local?'selected':'') + '" onclick="selectPick(' + ev.id + ',\\'' + ev.local.replace(/'/g,"\\\\'") + '\\')">' +
-            '<span class="mult">x' + odds.local.toFixed(2) + '</span><span class="team-label">' + ev.local.split(' ')[0] + '</span>' +
-          '</button>' +
-          '<button class="bet-btn ' + (pick===ev.visitante?'selected':'') + '" onclick="selectPick(' + ev.id + ',\\'' + ev.visitante.replace(/'/g,"\\\\'") + '\\')">' +
-            '<span class="mult">x' + odds.visit.toFixed(2) + '</span><span class="team-label">' + ev.visitante.split(' ')[0] + '</span>' +
-          '</button>' +
-        '</div>' +
-        (pick ? ('<div class="bet-input-row">' +
-          '<input type="number" id="bi-' + ev.id + '" placeholder="Coins min. 10" min="10" step="10">' +
-          '<button onclick="placeBet(' + ev.id + ',\\'' + pick.replace(/'/g,"\\\\'") + '\\')">Apostar</button>' +
-        '</div>') : '');
+      const localSafe = ev.local.replace(/"/g, '&quot;');
+      const visitSafe = ev.visitante.replace(/"/g, '&quot;');
+      const localBtnClass = pick === ev.local ? 'bet-btn selected' : 'bet-btn';
+      const visitBtnClass = pick === ev.visitante ? 'bet-btn selected' : 'bet-btn';
+      let html = '<div class="bet-buttons">';
+      html += '<button class="' + localBtnClass + '" data-event="' + ev.id + '" data-team="' + localSafe + '" onclick="selectPickFromBtn(this)">';
+      html += '<span class="mult">x' + odds.local.toFixed(2) + '</span><span class="team-label">' + ev.local.split(' ')[0] + '</span>';
+      html += '</button>';
+      html += '<button class="' + visitBtnClass + '" data-event="' + ev.id + '" data-team="' + visitSafe + '" onclick="selectPickFromBtn(this)">';
+      html += '<span class="mult">x' + odds.visit.toFixed(2) + '</span><span class="team-label">' + ev.visitante.split(' ')[0] + '</span>';
+      html += '</button>';
+      html += '</div>';
+      if (pick) {
+        const pickSafe = pick.replace(/"/g, '&quot;');
+        html += '<div class="bet-input-row">';
+        html += '<input type="number" id="bi-' + ev.id + '" placeholder="Coins min. 10" min="10" step="10">';
+        html += '<button data-event="' + ev.id + '" data-team="' + pickSafe + '" onclick="placeBetFromBtn(this)">Apostar</button>';
+        html += '</div>';
+      }
+      actionHTML = html;
     }
 
     const scoreHTML = (isLive || isFinalizado) && ev.tipo === 'futbol'
@@ -741,7 +749,9 @@ function renderEvents() {
       ? ('<div class="team-score">' + (ev.golVisitante ?? 0) + '</div>')
       : '';
 
-    return '<div class="event-card ' + (bet && !isFinalizado ? 'bet-placed' : '') + ' ' + (isLive ? 'live' : '') + '">' +
+    const cardClass = 'event-card' + (bet && !isFinalizado ? ' bet-placed' : '') + (isLive ? ' live' : '');
+
+    return '<div class="' + cardClass + '">' +
       '<div class="event-meta">' +
         '<div class="event-meta-left">' +
           '<span>' + (ev.tipo === 'futbol' ? 'Futbol' : 'DJ') + '</span>' +
@@ -757,6 +767,18 @@ function renderEvents() {
       actionHTML +
     '</div>';
   }).join('');
+}
+
+function selectPickFromBtn(btn) {
+  const eventId = btn.getAttribute('data-event');
+  const team = btn.getAttribute('data-team');
+  selectPick(eventId, team);
+}
+
+function placeBetFromBtn(btn) {
+  const eventId = btn.getAttribute('data-event');
+  const team = btn.getAttribute('data-team');
+  placeBet(eventId, team);
 }
 
 function selectPick(eventId, team) {
@@ -790,8 +812,14 @@ function renderPrizes() {
       '<div class="prize-icon">' + p.icon + '</div>' +
       '<div class="prize-name">' + p.name + '</div>' +
       '<div class="prize-coins">' + p.coins + ' RC</div><br>' +
-      '<button class="prize-btn" onclick="requestPrize(\\'' + p.name + '\\',' + p.coins + ')">' + (state.balance >= p.coins ? 'Solicitar canje' : 'Faltan ' + (p.coins - state.balance) + ' RC') + '</button>' +
+      '<button class="prize-btn" data-prize="' + p.name + '" data-coins="' + p.coins + '" onclick="requestPrizeFromBtn(this)">' + (state.balance >= p.coins ? 'Solicitar canje' : 'Faltan ' + (p.coins - state.balance) + ' RC') + '</button>' +
     '</div>').join('');
+}
+
+function requestPrizeFromBtn(btn) {
+  const name = btn.getAttribute('data-prize');
+  const coins = parseInt(btn.getAttribute('data-coins'));
+  requestPrize(name, coins);
 }
 
 async function requestPrize(name, coins) {
