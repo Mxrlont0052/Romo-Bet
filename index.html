@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>ROMO BET</title>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/flag-icons/7.2.3/css/flag-icons.min.css">
 <style>
   :root {
     --red: #E41E1E; --red-dark: #B01010;
@@ -87,6 +88,7 @@
   .teams-row { display:flex; align-items:center; justify-content:space-between; margin-bottom:1rem; }
   .team { text-align:center; flex:1; }
   .team-flag { font-size:32px; margin-bottom:5px; display:block; }
+  span.fi.team-flag { width:1.6em; height:1.2em; border-radius:3px; margin:0 auto 5px; box-shadow:0 0 0 1px var(--white-border); }
   .team-name { font-size:12px; font-weight:600; color:var(--white); }
   .team-score { font-size:22px; font-weight:800; color:var(--red); margin-top:4px; }
   .vs { font-size:11px; color:var(--text-muted); padding:0 12px; font-weight:700; }
@@ -511,19 +513,25 @@ const PRIZES = [
 ];
 
 const FLAGS = {
-  'Paises Bajos':'NED','Marruecos':'MAR','Costa de Marfil':'CIV','Noruega':'NOR',
-  'Francia':'FRA','Suecia':'SWE','Mexico':'MEX','Ecuador':'ECU',
-  'Inglaterra':'ENG','England':'ENG','Rd Congo':'COD','Belgica':'BEL','Belgium':'BEL','Senegal':'SEN',
-  'Estados Unidos':'USA','USA':'USA','Bosnia':'BIH','Bosnia & Herzegovina':'BIH','Espana':'ESP','Spain':'ESP','Austria':'AUT',
-  'Portugal':'POR','Croacia':'CRO','Croatia':'CRO','Suiza':'SUI','Switzerland':'SUI','Argelia':'ALG','Algeria':'ALG',
-  'Australia':'AUS','Egipto':'EGY','Egypt':'EGY','Argentina':'ARG','Cabo Verde':'CPV','Cape Verde':'CPV',
-  'Colombia':'COL','Ghana':'GHA','Brazil':'BRA','Brasil':'BRA','Germany':'GER','Alemania':'GER',
-  'Japan':'JPN','Japon':'JPN','South Korea':'KOR','Corea del Sur':'KOR','Canada':'CAN',
-  'Czech Republic':'CZE','Sweden':'SWE','Tunisia':'TUN','Iran':'IRN','New Zealand':'NZL',
-  'Saudi Arabia':'KSA','Uruguay':'URU','Qatar':'QAT','Paraguay':'PAR','Turkey':'TUR','Turquia':'TUR',
-  'Curacao':'CUW','South Africa':'RSA','Haiti':'HAI','Scotland':'SCO','Panama':'PAN','Jordan':'JOR',
-  'Iraq':'IRQ','DR Congo':'COD','Uzbekistan':'UZB'
+  'Paises Bajos':'nl','Netherlands':'nl','Marruecos':'ma','Morocco':'ma','Costa de Marfil':'ci','Ivory Coast':'ci','Noruega':'no','Norway':'no',
+  'Francia':'fr','France':'fr','Suecia':'se','Mexico':'mx','Ecuador':'ec',
+  'Inglaterra':'gb-eng','England':'gb-eng','Rd Congo':'cd','Belgica':'be','Belgium':'be','Senegal':'sn',
+  'Estados Unidos':'us','USA':'us','Bosnia':'ba','Bosnia & Herzegovina':'ba','Espana':'es','Spain':'es','Austria':'at',
+  'Portugal':'pt','Croacia':'hr','Croatia':'hr','Suiza':'ch','Switzerland':'ch','Argelia':'dz','Algeria':'dz',
+  'Australia':'au','Egipto':'eg','Egypt':'eg','Argentina':'ar','Cabo Verde':'cv','Cape Verde':'cv',
+  'Colombia':'co','Ghana':'gh','Brazil':'br','Brasil':'br','Germany':'de','Alemania':'de',
+  'Japan':'jp','Japon':'jp','South Korea':'kr','Corea del Sur':'kr','Canada':'ca',
+  'Czech Republic':'cz','Sweden':'se','Tunisia':'tn','Iran':'ir','New Zealand':'nz',
+  'Saudi Arabia':'sa','Uruguay':'uy','Qatar':'qa','Paraguay':'py','Turkey':'tr','Turquia':'tr',
+  'Curacao':'cw','South Africa':'za','Haiti':'ht','Scotland':'gb-sct','Panama':'pa','Jordan':'jo',
+  'Iraq':'iq','DR Congo':'cd','Uzbekistan':'uz'
 };
+
+function normTeam(s) {
+  return (s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+}
+const FLAGS_NORM = {};
+Object.keys(FLAGS).forEach(k => { FLAGS_NORM[normTeam(k)] = FLAGS[k]; });
 
 let state = { user:null, balance:0, isAdmin:false, config:{}, events:[], bets:[], students:[] };
 let picks = {};
@@ -692,8 +700,10 @@ function renderEvents() {
   g.innerHTML = sorted.map(ev => {
     const bet = getBetForEvent(ev.id);
     const pick = picks[ev.id];
-    const fL = FLAGS[ev.local] || (ev.banderaLocal || '');
-    const fV = FLAGS[ev.visitante] || (ev.banderaVisitante || '');
+    const flagCodeL = FLAGS_NORM[normTeam(ev.local)] || ev.banderaLocal || '';
+    const flagCodeV = FLAGS_NORM[normTeam(ev.visitante)] || ev.banderaVisitante || '';
+    const fL = flagCodeL ? '<span class="fi fi-' + flagCodeL + ' team-flag"></span>' : '<span class="team-flag">🏳️</span>';
+    const fV = flagCodeV ? '<span class="fi fi-' + flagCodeV + ' team-flag"></span>' : '<span class="team-flag">🏳️</span>';
     const isFinalizado = ev.estado === 'finalizado';
     const isLive = ev.estado === 'en_vivo';
     const isCerrado = ev.estado === 'cerrado';
@@ -760,9 +770,9 @@ function renderEvents() {
         badgeHTML +
       '</div>' +
       '<div class="teams-row">' +
-        '<div class="team"><span class="team-flag">' + fL + '</span><span class="team-name">' + ev.local + '</span>' + scoreHTML + '</div>' +
+        '<div class="team">' + fL + '<span class="team-name">' + ev.local + '</span>' + scoreHTML + '</div>' +
         '<span class="vs">VS</span>' +
-        '<div class="team"><span class="team-flag">' + fV + '</span><span class="team-name">' + ev.visitante + '</span>' + scoreHTMLv + '</div>' +
+        '<div class="team">' + fV + '<span class="team-name">' + ev.visitante + '</span>' + scoreHTMLv + '</div>' +
       '</div>' +
       actionHTML +
     '</div>';
