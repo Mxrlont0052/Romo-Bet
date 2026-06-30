@@ -233,6 +233,20 @@
   .clasificacion-score { font-weight:800; color:var(--red); font-size:13px; }
   .clasificacion-meta { font-size:11px; color:var(--text-muted); text-align:right; line-height:1.4; white-space:nowrap; }
 
+  .recharge-box {
+    background:var(--black-2); border:1px solid var(--white-border); border-radius:16px;
+    padding:1.5rem; max-width:420px;
+  }
+  .recharge-bank-details {
+    background:var(--black-3); border:1px solid var(--white-border); border-radius:10px;
+    padding:0.75rem 1rem; margin-bottom:1rem;
+  }
+  .bank-row { display:flex; justify-content:space-between; padding:4px 0; font-size:13px; }
+  .bank-row span:first-child { color:var(--text-muted); }
+  .bank-row span:last-child { color:var(--white); font-weight:600; }
+  .recharge-coins-preview { font-size:14px; font-weight:700; color:#ff6060; margin-bottom:1rem; text-align:center; }
+  .recharge-note { font-size:11px; color:var(--text-muted); margin-top:12px; line-height:1.5; }
+
   .event-card { cursor:pointer; }
   .bettor-side { margin-bottom:1.25rem; }
   .bettor-side:last-child { margin-bottom:0; }
@@ -349,6 +363,7 @@
     <button class="nav-tab" onclick="showSection('clasificacion',this)">Clasificacion</button>
     <button class="nav-tab" onclick="showSection('premios',this)">Premios</button>
     <button class="nav-tab" onclick="showSection('historial',this)">Historial</button>
+    <button class="nav-tab" onclick="showSection('recargar',this)">Recargar</button>
     <button class="nav-tab" id="adminTabBtn" onclick="openAdmin()" style="display:none;color:#ff6060;">Admin</button>
   </div>
   <div class="nav-right">
@@ -388,6 +403,28 @@
     <section id="sec-historial" style="display:none">
       <div class="section-title">Tus apuestas</div>
       <div class="history-list" id="historyList"></div>
+    </section>
+    <section id="sec-recargar" style="display:none">
+      <div class="section-title">Recargar Romo Coins</div>
+      <div class="recharge-box">
+        <div class="form-group">
+          <label class="form-label">Banco a transferir</label>
+          <select class="form-select" id="rgBanco" onchange="renderBankDetails()">
+            <option value="Pichincha">Banco Pichincha</option>
+            <option value="Guayaquil">Banco de Guayaquil</option>
+            <option value="Produbanco">Produbanco</option>
+            <option value="Pacifico">Banco del Pacifico</option>
+          </select>
+        </div>
+        <div class="recharge-bank-details" id="rgBankDetails"></div>
+        <div class="form-group">
+          <label class="form-label">Monto transferido (USD)</label>
+          <input type="number" class="form-input" id="rgMonto" min="1" step="0.5" placeholder="Ej. 25" oninput="updateRechargeCoins()">
+        </div>
+        <div class="recharge-coins-preview" id="rgCoinsPreview">Recibiras 0 RC · tasa 10 RC por $1</div>
+        <button class="btn-red" onclick="submitRecharge()">Enviar comprobante por WhatsApp</button>
+        <div class="recharge-note">Despues de transferir, adjunta la captura del comprobante en el chat de WhatsApp que se va a abrir. Tus coins se acreditan cuando el admin confirme el pago.</div>
+      </div>
     </section>
   </div>
 </main>
@@ -565,6 +602,15 @@
 <script>
 const WORKER_URL = 'https://yellow-lab-4630.marlonromero0052.workers.dev';
 const ADMIN_EMAILS = ['marlonromero0052@gmail.com','danielpillajo140@gmail.com','lskike@gmail.com'];
+
+const WHATSAPP_PHONE = '593979060882';
+const RC_PER_DOLLAR = 10;
+const BANK_ACCOUNTS = {
+  Pichincha: { tipo: 'Cuenta de ahorro transaccional', numero: '5199166100', cedula: '1722029202', titular: 'Peter Romo' },
+  Guayaquil: { numero: '0042852605', cedula: '1722029202', titular: 'Peter Antonio Romo Estevez' },
+  Produbanco: { numero: '20004485481', titular: 'Peter Antonio Romo' },
+  Pacifico: { numero: '1069898332', titular: 'Peter Romo' },
+};
 const PRIZES = [
   {name:'Gafas',coins:100,icon:'GA'},
   {name:'Llavero Romo',coins:100,icon:'LL'},
@@ -1094,7 +1140,7 @@ function setEventsTipo(tipo) {
 }
 
 function showSection(name, btn) {
-  ['eventos','clasificacion','premios','historial'].forEach(s => {
+  ['eventos','clasificacion','premios','historial','recargar'].forEach(s => {
     document.getElementById('sec-' + s).style.display = s === name ? 'block' : 'none';
   });
   document.querySelectorAll('.nav-tab').forEach(b => b.classList.remove('active'));
@@ -1103,6 +1149,47 @@ function showSection(name, btn) {
   if (name === 'clasificacion') renderClasificacion();
   if (name === 'premios') renderPrizes();
   if (name === 'historial') renderHistory();
+  if (name === 'recargar') { renderBankDetails(); updateRechargeCoins(); }
+}
+
+function renderBankDetails() {
+  const banco = document.getElementById('rgBanco').value;
+  const acc = BANK_ACCOUNTS[banco];
+  document.getElementById('rgBankDetails').innerHTML =
+    (acc.tipo ? '<div class="bank-row"><span>Tipo</span><span>' + acc.tipo + '</span></div>' : '') +
+    '<div class="bank-row"><span>Numero</span><span>' + acc.numero + '</span></div>' +
+    (acc.cedula ? '<div class="bank-row"><span>Cedula</span><span>' + acc.cedula + '</span></div>' : '') +
+    '<div class="bank-row"><span>Titular</span><span>' + acc.titular + '</span></div>';
+}
+
+function updateRechargeCoins() {
+  const monto = parseFloat(document.getElementById('rgMonto').value) || 0;
+  const coins = Math.round(monto * RC_PER_DOLLAR);
+  document.getElementById('rgCoinsPreview').textContent = 'Recibiras ' + coins + ' RC · tasa ' + RC_PER_DOLLAR + ' RC por $1';
+}
+
+async function submitRecharge() {
+  const banco = document.getElementById('rgBanco').value;
+  const monto = parseFloat(document.getElementById('rgMonto').value);
+  if (!monto || monto <= 0) { toast('Ingresa un monto valido'); return; }
+  const coins = Math.round(monto * RC_PER_DOLLAR);
+  const nombre = state.user.nombre || state.user.email;
+  const email = state.user.email;
+
+  showLoading(true);
+  const res = await api({ action: 'requestRecharge', email, nombre, banco, monto, coins });
+  showLoading(false);
+  if (res.error) { toast('Error: ' + res.error); return; }
+
+  const reporte =
+    'Transferencia: ' + banco + '\n' +
+    'Valor: ' + monto + '$\n' +
+    'Coins: ' + coins + '\n' +
+    'Usuario: ' + nombre + '\n' +
+    'Email: ' + email;
+
+  window.open('https://wa.me/' + WHATSAPP_PHONE + '?text=' + encodeURIComponent(reporte), '_blank');
+  toast('Solicitud registrada · completa el envio en WhatsApp');
 }
 
 function openAdmin() {
